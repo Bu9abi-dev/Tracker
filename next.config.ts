@@ -10,6 +10,10 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  experimental: {
+    // Statement uploads (up to 4 MB) go through a server action; Vercel caps requests at ~4.5 MB.
+    serverActions: { bodySizeLimit: "4.4mb" },
+  },
   // The CSV data source reads /data at runtime; make sure Vercel bundles it.
   outputFileTracingIncludes: { "/**": ["./data/**/*.csv"] },
   async headers() {

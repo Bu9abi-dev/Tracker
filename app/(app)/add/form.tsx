@@ -71,7 +71,7 @@ export function AddEntryForm({ portfolios, today }: { portfolios: PortfolioOptio
       action={action}
       noValidate
       onSubmit={(e) => {
-        const r = validateEntry({ id, date, portfolioId, invested, value, notes }, today);
+        const r = validateEntry({ id, date, portfolioId, invested, value, notes }, today, portfolios.map((p) => p.id));
         setClientErrors(r.ok ? {} : r.errors);
         if (!r.ok) e.preventDefault();
       }}

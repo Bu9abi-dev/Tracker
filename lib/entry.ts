@@ -1,18 +1,15 @@
-import { PORTFOLIOS, type PortfolioId } from "@/config/portfolios";
 import { parseDate, parseNumber } from "./data/clean";
 import type { NewEntry } from "./data/types";
 
 export const MAX_NOTES = 500;
 
-/** Portfolios you can add snapshots to (active ones). */
-export const WRITABLE_IDS = PORTFOLIOS.filter((p) => p.status === "active").map((p) => p.id) as PortfolioId[];
 
 export type EntryErrors = Partial<Record<"id" | "date" | "portfolioId" | "invested" | "value" | "notes", string>>;
 
 export type ValidationResult = { ok: true; entry: NewEntry } | { ok: false; errors: EntryErrors };
 
 /** Validate the Add form (runs on both client and server). Numbers may contain "USD", "$" and commas. */
-export function validateEntry(input: Record<string, unknown>, today: string): ValidationResult {
+export function validateEntry(input: Record<string, unknown>, today: string, writableIds: readonly string[]): ValidationResult {
   const errors: EntryErrors = {};
   const id = typeof input.id === "string" ? input.id.trim() : "";
   if (!/^[\w-]{8,64}$/.test(id)) errors.id = "Missing submission id — reload the page.";
@@ -22,7 +19,7 @@ export function validateEntry(input: Record<string, unknown>, today: string): Va
   else if (date > today) errors.date = "Date can't be in the future.";
 
   const portfolioId = String(input.portfolioId ?? "");
-  if (!(WRITABLE_IDS as string[]).includes(portfolioId)) errors.portfolioId = "Choose an active portfolio.";
+  if (!writableIds.includes(portfolioId)) errors.portfolioId = "Choose an active portfolio.";
 
   const invested = parseNumber(typeof input.invested === "string" ? input.invested : input.invested ?? "");
   if (!invested.ok) errors.invested = "Enter invested capital as a number (USD).";
@@ -39,7 +36,7 @@ export function validateEntry(input: Record<string, unknown>, today: string): Va
     ok: true,
     entry: {
       id,
-      portfolioId: portfolioId as PortfolioId,
+      portfolioId,
       date,
       invested: Math.round(invested.value * 100) / 100,
       value: Math.round(value.value * 100) / 100,

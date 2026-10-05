@@ -1,63 +1,71 @@
+import { findPortfolio, type PortfolioConfig, type Registry } from "@/config/portfolios";
 import {
-  PERSONAL_IDS,
-  PORTFOLIOS,
-  type PortfolioConfig,
-  type PortfolioId,
-  type PersonalPortfolioId,
-} from "@/config/portfolios";
-import { allocation, computeCombinedMetrics, computeMetrics, type CombinedMetrics, type Metrics } from "./calculations";
-import type { DataIssue, LoadResult, PortfolioData, Snapshot } from "./data/types";
+  allocation,
+  combinedSectorAllocation,
+  computeCombinedMetrics,
+  computeMetrics,
+  type CombinedMetrics,
+  type Metrics,
+  type SectorSlice,
+} from "./calculations";
+import type { DataIssue, LoadResult, PortfolioData, Snapshot, Statement } from "./data/types";
 
 export interface PortfolioView {
   config: PortfolioConfig;
   metrics: Metrics;
   snapshots: Snapshot[];
   issues: DataIssue[];
+  statement: Statement | null;
 }
 
 export interface PersonalView {
-  ids: readonly PersonalPortfolioId[];
+  ids: readonly string[];
   metrics: CombinedMetrics;
-  allocation: { id: PersonalPortfolioId; value: number; share: number }[];
+  allocation: { id: string; value: number; share: number }[];
+  /** Sector allocation from the latest statement of each Personal portfolio. */
+  sectors: SectorSlice[];
+  /** Personal portfolios that have a statement (sector view covers only these). */
+  sectorCoverage: string[];
   issues: DataIssue[];
 }
 
-type Loaded = Partial<Record<PortfolioId, PortfolioData>>;
-
-export function buildPortfolioView(config: PortfolioConfig, data: PortfolioData | undefined): PortfolioView {
+export function buildPortfolioView(config: PortfolioConfig, data: PortfolioData | undefined, statement?: Statement): PortfolioView {
   const snapshots = data?.snapshots ?? [];
-  return { config, metrics: computeMetrics(snapshots), snapshots, issues: data?.issues ?? [] };
+  return { config, metrics: computeMetrics(snapshots), snapshots, issues: data?.issues ?? [], statement: statement ?? null };
 }
 
 /**
- * The combined Personal view. It reads only PERSONAL_IDS (P1 + P3) — managed
- * money like P2 is never passed in, so it can't leak into these numbers.
+ * The combined Personal view. It reads only registry.personalIds — managed money
+ * (P2 or any portfolio created as managed) is never in that list, so it can't
+ * leak into these numbers, the allocation, or the sector view.
  */
-export function buildPersonalView(portfolios: Loaded): PersonalView {
-  const components: Partial<Record<PersonalPortfolioId, Snapshot[]>> = {};
-  for (const id of PERSONAL_IDS) components[id] = portfolios[id]?.snapshots ?? [];
-  const metrics = computeCombinedMetrics(components as Record<string, Snapshot[]>);
-  const latest = Object.fromEntries(
-    PERSONAL_IDS.map((id) => [id, components[id]?.at(-1)?.value ?? 0]),
-  ) as Record<PersonalPortfolioId, number>;
+export function buildPersonalView(
+  registry: Registry,
+  data: Record<string, PortfolioData | undefined>,
+  statements: Record<string, Statement | undefined> = {},
+): PersonalView {
+  const ids = registry.personalIds.filter((id) => findPortfolio(registry, id)?.ownership === "personal");
+  const components: Record<string, Snapshot[]> = {};
+  for (const id of ids) components[id] = data[id]?.snapshots ?? [];
+  const metrics = computeCombinedMetrics(components);
+  const latest = Object.fromEntries(ids.map((id) => [id, components[id]?.at(-1)?.value ?? 0]));
+  const holdingsBy = Object.fromEntries(ids.map((id) => [id, statements[id]?.holdings]));
   return {
-    ids: PERSONAL_IDS,
+    ids,
     metrics,
-    allocation: allocation(latest) as PersonalView["allocation"],
-    issues: PERSONAL_IDS.flatMap((id) => portfolios[id]?.issues ?? []),
+    allocation: allocation(latest),
+    sectors: combinedSectorAllocation(holdingsBy, ids),
+    sectorCoverage: ids.filter((id) => statements[id]),
+    issues: ids.flatMap((id) => data[id]?.issues ?? []),
   };
 }
 
 export function buildAllViews(load: LoadResult): PortfolioView[] {
-  return PORTFOLIOS.map((p) => buildPortfolioView(p, load.portfolios[p.id]));
-}
-
-export function allIssues(load: LoadResult): DataIssue[] {
-  return PORTFOLIOS.flatMap((p) => load.portfolios[p.id]?.issues ?? []);
+  return load.registry.list.map((p) => buildPortfolioView(p, load.data[p.id], load.statements[p.id]));
 }
 
 export interface JournalEntry {
-  portfolioId: PortfolioId;
+  portfolioId: string;
   date: string;
   notes: string;
   invested: number;
@@ -66,10 +74,10 @@ export interface JournalEntry {
 }
 
 /** All notes from all portfolios, newest first. Each entry keeps its own portfolio. */
-export function buildJournal(load: LoadResult): JournalEntry[] {
+export function buildJournal(load: Pick<LoadResult, "registry" | "data">): JournalEntry[] {
   const out: JournalEntry[] = [];
-  for (const p of PORTFOLIOS) {
-    const snaps = load.portfolios[p.id]?.snapshots ?? [];
+  for (const p of load.registry.list) {
+    const snaps = load.data[p.id]?.snapshots ?? [];
     snaps.forEach((s, i) => {
       if (!s.notes) return;
       const prev = snaps[i - 1];

@@ -1,6 +1,6 @@
 # Portfolio Dashboard
 
-A private, password-protected dashboard for my investment portfolios. It replaces the dashboard and chart tabs of my Google Sheet; the Sheet (fed by my Google Form) stays the source of truth. It's built for iPhone: you add it to the home screen and it opens full-screen like an app.
+A private, password-protected dashboard for my investment portfolios. It replaces the dashboard and chart tabs of my Google Sheet; the Sheet stays the source of truth. It's built for iPhone: you add it to the home screen and it opens full-screen like an app.
 
 Built with Next.js (App Router), TypeScript, Tailwind CSS, Recharts and Vitest. It deploys to Vercel's free tier.
 
@@ -8,7 +8,11 @@ Built with Next.js (App Router), TypeScript, Tailwind CSS, Recharts and Vitest. 
 - **Portfolio pages**: KPIs, invested vs value (deposits marked), P&L over time, drawdown, and the full history with notes.
 - **Journal**: every note from every portfolio on one timeline, filterable and searchable.
 - **Add entry**: a mobile form that writes a new snapshot to the Google Sheet (Phase 2).
+- **Upload statement**: upload an IBKR, OKX or other broker statement (PDF, screenshot or CSV). Google Gemini reads the holdings, you check them, and each portfolio page then shows current holdings, amounts, profit and sector allocation.
+- **New portfolio**: add portfolios from the app. Each one gets its own tab in your Sheet.
 - **Data issues**: rows that were skipped or look suspicious are listed, never silently dropped.
+
+> **Not technical? Follow [docs/SETUP.md](docs/SETUP.md)**, a click-by-click guide to connecting your Sheet and switching on statement reading.
 
 > The CSVs in `/data` are **synthetic sample data**, generated for development. Don't commit real numbers if this repository is public.
 
@@ -64,12 +68,14 @@ Other scripts:
 | `DATA_SOURCE` | no | `csv` (default, Phase 1: reads `/data`) or `apps-script` (Phase 2: live Google Sheet). |
 | `APPS_SCRIPT_URL` | Phase 2 | The Apps Script web app URL (ends in `/exec`). |
 | `APPS_SCRIPT_TOKEN` | Phase 2 | The secret token from the Apps Script (see below). |
+| `GEMINI_API_KEY` | for uploads | Free key from [Google AI Studio](https://aistudio.google.com/apikey). Used only on the server. |
+| `GEMINI_MODEL` | no | Gemini model to use (default `gemini-2.5-flash`). Set it if Google retires the default. |
 
 None of these use the `NEXT_PUBLIC_` prefix, so none of them are ever sent to the browser.
 
 ## Portfolios config
 
-Portfolios are defined in [`config/portfolios.ts`](config/portfolios.ts). To add a portfolio, rename one or archive one, edit that file.
+The defaults live in [`config/portfolios.ts`](config/portfolios.ts). In Sheet mode, the **Portfolios** tab of the Google Sheet is merged over them. That tab is created automatically, and the app's **Portfolios → + New** button adds rows to it. To rename or archive a portfolio, edit its row in that tab.
 
 | Id | Portfolio | Status | In Personal |
 | --- | --- | --- | --- |
@@ -79,11 +85,11 @@ Portfolios are defined in [`config/portfolios.ts`](config/portfolios.ts). To add
 | P4 | Real Estate | planned | — |
 | P5 | Retirement (merged into P1, Aug 2026) | archived | — |
 
-**Personal = P1 + P3 only.** P2 is `ownership: "managed"`, and three separate checks keep it out of Personal:
+**Personal = P1 + P3** (plus any new personal portfolio you choose to include). Managed money is kept out of every Personal number, including the allocation donut and the sector view:
 
-1. **Types**: managed portfolios have `includeInPersonal: false` as a literal type, so setting it to `true` doesn't compile.
-2. **Runtime**: `assertConfig()` throws at startup if a managed, planned or archived portfolio is put in Personal.
-3. **Tests**: these confirm that Personal is exactly P1 + P3, and that changing P2's data never changes any Personal number.
+1. **P2 is always managed.** It's listed in `ALWAYS_MANAGED`, so editing the Sheet can't change that. Any portfolio created as "someone else's" stays managed, and the app has no control to switch it.
+2. **Personal counts only portfolios that are personal, active and opted in.** If a managed portfolio's "In Personal" cell says yes, it's ignored and flagged in Data issues.
+3. **Tests** confirm that changing P2's snapshots or holdings never changes any Personal number.
 
 ## Data format
 
@@ -110,6 +116,22 @@ Cleaning on import (`lib/data/clean.ts`):
 | Duplicate date | One row kept, listed |
 | Market move over 50% in one period, a large capital change with no note, value 0 with capital in | Row kept, flagged for review |
 
+## Statements & holdings
+
+1. **Upload**: choose the portfolio, the file (PDF, PNG/JPG/HEIC screenshot or CSV, up to 4 MB) and an optional note for the AI.
+2. **Read**: the server sends the file to Google Gemini (`lib/gemini.ts`), asking for structured JSON with a fixed sector list. The key stays on the server.
+3. **Review**: you check what it found on editable cards. **Confirm stays disabled until** every flagged row and total is either fixed or ticked as checked:
+   - **each row**: quantity × price must match the value within 1%
+   - **the total**: the holdings must add up to the statement's total within 0.5%
+   - **the account**: if a statement looks like it belongs to a different portfolio (matched on broker plus the last 4 digits of the account), you have to confirm it explicitly
+   - **managed portfolios** (P2) always need an extra "this is Mother's statement" confirmation
+4. **Save**: the confirmed holdings go to the **Statements** and **Holdings** tabs in your Sheet. **The file itself is not stored.** AED statements are converted at 3.67, and other currencies aren't accepted yet.
+5. **Show**: each portfolio page shows its latest statement's holdings: value, weight, unrealized P&L where the statement includes cost (never guessed), and sector allocation. The Overview shows a combined sector view for Personal only.
+
+Performance (TWR, P&L, drawdown) still comes from your weekly snapshots. Holdings come from your latest statement. If the two totals differ, the page says so.
+
+> **Privacy:** on Gemini's free plan, Google may use uploaded content to improve its products.
+
 ## How the numbers are calculated
 
 All financial maths is in [`lib/calculations.ts`](lib/calculations.ts) and covered by [`lib/calculations.test.ts`](lib/calculations.test.ts), which includes a hand-computed golden example. Everything is calculated in USD. AED is applied only for display, at the fixed rate **1 USD = 3.67 AED**.
@@ -135,9 +157,9 @@ All financial maths is in [`lib/calculations.ts`](lib/calculations.ts) and cover
 
 The script turns your Google Sheet into a small private JSON API that only the dashboard's server can call.
 
-1. **Prepare the sheet.** The script supports two layouts. Set `CONFIG.MODE` at the top of `Code.gs` to match yours:
-   - `"tabs"` (default): one tab per portfolio, named `P1`, `P2`, `P3`… (edit `CONFIG.TABS` to use other names). Each tab has a header row with `Date`, `Invested`, `Value` and `Notes`.
-   - `"responses"`: one sheet, e.g. your Google Form's `Form Responses 1`, with `Date`, `Portfolio`, `Invested`, `Value` and `Notes` columns. Each Portfolio answer must start with the id, e.g. `P1 — Active Trading`.
+The step-by-step version for non-technical users is in [docs/SETUP.md](docs/SETUP.md).
+
+1. **The sheet layout.** You need one tab per portfolio. The script finds the header row (`Date`, `Invested (USD)`, `Value (USD)`, …, `Notes`) by itself in the first 10 rows, so title rows above it are fine. New entries go into the first empty row and only fill Date, Invested, Value and Notes, so pre-filled formula columns keep working. On first use the script creates a **Portfolios** tab that maps each id to its tab name; edit `CONFIG.SEED` if your tab names differ.
 2. In the Google Sheet, open **Extensions → Apps Script**.
 3. Replace the contents of `Code.gs` with [`apps-script/Code.gs`](apps-script/Code.gs). Optionally, enable *Project Settings → Show "appsscript.json"* and paste in [`apps-script/appsscript.json`](apps-script/appsscript.json).
 4. **Create the token.** Choose `generateToken` in the function dropdown and click **Run**. Approve the permissions; it only accesses this spreadsheet. A dialog shows the new token, which is saved in *Project Settings → Script properties* as `API_TOKEN`. Copy it. Running `generateToken` again rotates the token.
@@ -150,6 +172,7 @@ The script turns your Google Sheet into a small private JSON API that only the d
 After editing the script later, use **Deploy → Manage deployments → Edit → Version: New version**. That keeps the same URL.
 
 How it works:
+- Actions: `list`, `add`, `createPortfolio` (copies the layout and formulas of your first portfolio tab, with data and charts cleared) and `saveStatement`.
 - **Reads and writes are both POST requests**, with the token in the JSON body. The token never appears in a URL, so it can't leak through access logs. A GET returns nothing.
 - Dates are returned as `YYYY-MM-DD` in the spreadsheet's time zone. Numbers are returned raw, and the dashboard cleans them and flags problems.
 - Adding an entry is **idempotent**: a double tap or a retry with the same submission id is ignored for 6 hours. Appends run under a lock, and notes that start with `=`, `+`, `-` or `@` are escaped so they can't become formulas.
@@ -178,7 +201,7 @@ This is private financial data, so:
 - The session cookie is `httpOnly`, `Secure` in production, `SameSite=Lax`, and HMAC-signed with an expiry. Its key is derived from both `SESSION_SECRET` and the password, so changing either one signs out every device. That's the remote logout if a phone is lost.
 - The password must be at least 12 characters and is compared in constant time. Failed logins are throttled per server instance. Serverless instances don't share memory, so the real protection is a long random password.
 - Every page and API response has `Cache-Control: private, no-store`, `X-Robots-Tag: noindex` and `X-Frame-Options: DENY`. There's no service worker or offline cache, so no financial data is stored on the device.
-- The Apps Script token lives only in server-side environment variables and travels in POST bodies.
+- The Apps Script token and the Gemini key live only in server-side environment variables. Uploaded statements are passed straight to Gemini and never stored. Only the holdings you confirm are saved, to your own Sheet.
 
 ## Project structure
 
@@ -193,9 +216,12 @@ lib/data/                   swappable data layer
   apps-script-source.ts       Phase 2 (+ tests)
   index.ts                    picks the source from DATA_SOURCE, cleans, requires a session
 lib/portfolio.ts            view models: per portfolio, Personal (P1+P3), journal (+ tests)
+lib/holdings.ts             statements from the Sheet, review checks, identity check (+ tests)
+lib/gemini.ts               statement reading with Google Gemini (+ tests)
+lib/new-portfolio.ts        "New portfolio" validation (+ tests)
 lib/session.ts, lib/auth.ts session tokens, login throttling, requireSession
 proxy.ts                    route protection
-app/(app)/                  Overview, portfolios, /p/[id], journal, add, settings
+app/(app)/                  Overview, portfolios (+ new), /p/[id], journal, add, upload, settings
 app/login/                  sign-in page and actions
 apps-script/                Google Apps Script web app
 components/                 UI, charts (Recharts), currency toggle

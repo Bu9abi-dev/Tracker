@@ -1,5 +1,4 @@
 import { ChevronRight, CircleAlert, Info, TriangleAlert } from "lucide-react";
-import { getPortfolio } from "@/config/portfolios";
 import type { DataIssue } from "@/lib/data/types";
 import { formatDate } from "@/lib/format";
 
@@ -8,7 +7,7 @@ const TONE = { error: "text-down", warning: "text-warn", info: "text-muted" } as
 const ORDER = { error: 0, warning: 1, info: 2 } as const;
 
 /** Rows that were skipped or look suspicious. Nothing is dropped silently. */
-export function DataIssuesPanel({ issues, showPortfolio = true }: { issues: DataIssue[]; showPortfolio?: boolean }) {
+export function DataIssuesPanel({ issues, names = {}, showPortfolio = true }: { issues: DataIssue[]; names?: Record<string, string>; showPortfolio?: boolean }) {
   if (issues.length === 0) return null;
   const sorted = [...issues].sort((a, b) => ORDER[a.severity] - ORDER[b.severity] || (b.date ?? "").localeCompare(a.date ?? ""));
   const skipped = issues.filter((i) => i.action === "skipped").length;
@@ -35,7 +34,7 @@ export function DataIssuesPanel({ issues, showPortfolio = true }: { issues: Data
               <div className="min-w-0">
                 <p className="text-fg">{i.message}</p>
                 <p className="mt-0.5 text-xs text-muted">
-                  {showPortfolio ? `${i.portfolioId} ${getPortfolio(i.portfolioId)?.shortName ?? ""} · ` : ""}
+                  {showPortfolio ? `${i.portfolioId} ${names[i.portfolioId] ?? ""} · ` : ""}
                   {i.row ? `Row ${i.row} · ` : ""}
                   {i.date ? `${formatDate(i.date)} · ` : ""}
                   {i.action === "skipped" ? "Not used in calculations" : "Kept"}

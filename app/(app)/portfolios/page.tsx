@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Plus } from "lucide-react";
 import { loadData } from "@/lib/data";
 import { buildAllViews } from "@/lib/portfolio";
 import { formatDate } from "@/lib/format";
@@ -20,7 +20,15 @@ export default async function PortfoliosPage() {
   const views = buildAllViews(await loadData());
   return (
     <div className="space-y-8">
-      <h1 className="text-2xl font-semibold tracking-tight">Portfolios</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold tracking-tight">Portfolios</h1>
+        <Link
+          href="/portfolios/new"
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-fg px-4 text-sm font-semibold text-bg transition-opacity duration-200 hover:opacity-90"
+        >
+          <Plus aria-hidden size={16} /> New
+        </Link>
+      </div>
       {GROUPS.map((g) => {
         const list = views.filter((v) => g.filter(v.config.ownership, v.config.status));
         if (!list.length) return null;
@@ -65,7 +73,7 @@ export default async function PortfoliosPage() {
           </section>
         );
       })}
-      <p className="text-xs text-subtle">Add, rename or archive portfolios in config/portfolios.ts.</p>
+      <p className="text-xs text-subtle">To rename or archive a portfolio, edit its row in the Portfolios tab of your Google Sheet.</p>
     </div>
   );
 }

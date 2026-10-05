@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth";
-import { getDataSource } from "@/lib/data";
+import { getDataSource, loadData } from "@/lib/data";
 import { ReadOnlySourceError } from "@/lib/data/csv-source";
 import { validateEntry, type EntryErrors } from "@/lib/entry";
 import { formatDate, todayIso } from "@/lib/format";
@@ -12,7 +12,9 @@ export type AddState = { status: "idle" } | { status: "error"; message?: string;
 export async function addEntryAction(_prev: AddState, form: FormData): Promise<AddState> {
   // Server actions are public POST endpoints: always re-check the session.
   await requireSession();
-  const result = validateEntry(Object.fromEntries(form), todayIso());
+  const { registry } = await loadData();
+  const writable = registry.list.filter((p) => p.status === "active").map((p) => p.id);
+  const result = validateEntry(Object.fromEntries(form), todayIso(), writable);
   if (!result.ok) return { status: "error", errors: result.errors, message: "Please fix the highlighted fields." };
   try {
     await getDataSource().addEntry(result.entry);

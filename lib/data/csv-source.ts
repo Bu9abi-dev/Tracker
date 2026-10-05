@@ -1,27 +1,29 @@
 import "server-only";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { PORTFOLIOS, type PortfolioId } from "@/config/portfolios";
+import { DEFAULT_PORTFOLIOS } from "@/config/portfolios";
 import { csvToRawRows } from "./csv";
 import type { DataSource, RawRow } from "./types";
 
 export class ReadOnlySourceError extends Error {
-  constructor() {
-    super("The CSV data source is read-only. Set DATA_SOURCE=apps-script to add entries to your Google Sheet.");
+  constructor(what = "Saving") {
+    super(`${what} needs your Google Sheet to be connected. The app is currently showing sample data from CSV files.`);
     this.name = "ReadOnlySourceError";
   }
 }
 
-/** Phase 1: one CSV per portfolio in /data. A missing file means "no data yet". */
+/** Phase 1: one CSV per portfolio in /data (sample data). A missing file means "no data yet". */
 export function createCsvSource(dir = path.join(process.cwd(), "data")): DataSource {
   return {
     kind: "csv",
+    writable: false,
     async loadRaw() {
-      const rows: Partial<Record<PortfolioId, RawRow[]>> = {};
+      const rows: Record<string, RawRow[]> = {};
       await Promise.all(
-        PORTFOLIOS.map(async (p) => {
+        DEFAULT_PORTFOLIOS.map(async (p) => {
+          if (!p.csv) return;
           try {
-            rows[p.id] = csvToRawRows(await readFile(path.join(dir, p.source.csv), "utf8"));
+            rows[p.id] = csvToRawRows(await readFile(path.join(dir, p.csv), "utf8"));
           } catch (err) {
             if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
           }
@@ -30,7 +32,13 @@ export function createCsvSource(dir = path.join(process.cwd(), "data")): DataSou
       return { rows, fetchedAt: new Date().toISOString() };
     },
     async addEntry() {
-      throw new ReadOnlySourceError();
+      throw new ReadOnlySourceError("Adding entries");
+    },
+    async createPortfolio() {
+      throw new ReadOnlySourceError("Adding portfolios");
+    },
+    async saveStatement() {
+      throw new ReadOnlySourceError("Saving statements");
     },
   };
 }
