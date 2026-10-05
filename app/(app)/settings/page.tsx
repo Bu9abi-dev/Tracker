@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { LogOut } from "lucide-react";
-import { getDataSource } from "@/lib/data";
+import { getDataSource, loadData } from "@/lib/data";
 import { geminiConfigured } from "@/lib/gemini";
 import { CircleCheck, CircleDashed } from "lucide-react";
 import { THEME_COOKIE, parseTheme } from "@/lib/preferences";
@@ -15,7 +15,7 @@ export const metadata: Metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
-  const source = getDataSource().kind;
+  const { source, problem } = await checkConnection();
   return (
     <div className="mx-auto max-w-lg space-y-6">
       <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
@@ -32,7 +32,12 @@ export default async function SettingsPage() {
       </Card>
       <Card className="space-y-3">
         <h2 className="text-sm font-medium">Connections</h2>
-        <Status ok={source !== "csv"} label="Google Sheet" on="Connected — showing your real numbers" off="Not connected — showing sample numbers" />
+        <Status
+          ok={source !== "csv" && !problem}
+          label="Google Sheet"
+          on="Connected — showing your real numbers"
+          off={problem ? `Couldn't read your Sheet: ${problem}` : "Not connected — showing sample numbers"}
+        />
         <Status ok={geminiConfigured()} label="Gemini (statement reading)" on="On" off="Off — add GEMINI_API_KEY in Vercel" />
         {source === "csv" || !geminiConfigured() ? (
           <p className="text-xs text-muted">The step-by-step setup guide is in the project on GitHub: docs/SETUP.md.</p>
@@ -49,6 +54,26 @@ export default async function SettingsPage() {
       <p className="text-center text-xs text-subtle">To sign out every device, change SESSION_SECRET and redeploy.</p>
     </div>
   );
+}
+
+/**
+ * The live site hides error messages thrown while rendering pages, so this is
+ * where the real reason a Sheet connection fails is shown.
+ */
+async function checkConnection(): Promise<{ source: string; problem: string | null }> {
+  let source: string;
+  try {
+    source = getDataSource().kind;
+  } catch (e) {
+    return { source: "apps-script", problem: (e as Error).message };
+  }
+  if (source === "csv") return { source, problem: null };
+  try {
+    const load = await loadData();
+    return { source, problem: load.staleReason ?? null };
+  } catch (e) {
+    return { source, problem: (e as Error).message };
+  }
 }
 
 function Status({ ok, label, on, off }: { ok: boolean; label: string; on: string; off: string }) {

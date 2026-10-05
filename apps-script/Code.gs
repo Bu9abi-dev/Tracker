@@ -75,7 +75,7 @@ function doPost(e) {
 
 function list_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var tz = ss.getSpreadsheetTimeZone();
+  var tz = timeZone_(ss);
   var registry = readRegistry_(ss);
   var portfolios = {};
   registry.forEach(function (p) {
@@ -179,7 +179,7 @@ function add_(entry) {
   var p = findRegistry_(ss, e.portfolioId);
   if (!p) throw new Error("Unknown portfolio");
   var sheet = mustSheet_(ss, p.tab);
-  var t = readSnapshotTable_(sheet, ss.getSpreadsheetTimeZone());
+  var t = readSnapshotTable_(sheet, timeZone_(ss));
   // First empty row after the last row with data — formula columns are pre-filled, so only touch our cells.
   var last = t.headerRow;
   t.rows.forEach(function (r) {
@@ -231,7 +231,7 @@ function createPortfolio_(p) {
   if (template) {
     sheet = template.copyTo(ss).setName(tab);
     sheet.getCharts().forEach(function (c) { sheet.removeChart(c); });
-    var t = readSnapshotTable_(sheet, ss.getSpreadsheetTimeZone());
+    var t = readSnapshotTable_(sheet, timeZone_(ss));
     var lastRow = sheet.getLastRow();
     if (lastRow > t.headerRow) {
       [t.cols.date, t.cols.invested, t.cols.value, t.cols.notes].forEach(function (c) {
@@ -374,8 +374,20 @@ function remember_(key) {
 }
 
 /** Dates as calendar dates in the spreadsheet's time zone — no UTC shift. */
+/** Some Sheets (e.g. converted from Excel) have no time zone set; fall back so dates still read. */
+function timeZone_(ss) {
+  return String(ss.getSpreadsheetTimeZone() || Session.getScriptTimeZone() || "Etc/UTC");
+}
+
 function cellOut_(c, tz) {
-  return Object.prototype.toString.call(c) === "[object Date]" ? Utilities.formatDate(c, tz, "yyyy-MM-dd") : c;
+  if (Object.prototype.toString.call(c) !== "[object Date]") return c;
+  if (isNaN(c.getTime())) return ""; // an unreadable date cell
+  try {
+    return Utilities.formatDate(c, typeof tz === "string" && tz ? tz : "Etc/UTC", "yyyy-MM-dd");
+  } catch (err) {
+    // Last resort so one odd cell can't stop the whole Sheet from loading.
+    return c.getFullYear() + "-" + ("0" + (c.getMonth() + 1)).slice(-2) + "-" + ("0" + c.getDate()).slice(-2);
+  }
 }
 
 function norm_(v) {
