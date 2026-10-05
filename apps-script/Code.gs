@@ -376,11 +376,18 @@ function remember_(key) {
 /** Dates as calendar dates in the spreadsheet's time zone — no UTC shift. */
 /** Some Sheets (e.g. converted from Excel) have no time zone set; fall back so dates still read. */
 function timeZone_(ss) {
-  return ss.getSpreadsheetTimeZone() || Session.getScriptTimeZone() || "Etc/UTC";
+  return String(ss.getSpreadsheetTimeZone() || Session.getScriptTimeZone() || "Etc/UTC");
 }
 
 function cellOut_(c, tz) {
-  return Object.prototype.toString.call(c) === "[object Date]" ? Utilities.formatDate(c, tz, "yyyy-MM-dd") : c;
+  if (Object.prototype.toString.call(c) !== "[object Date]") return c;
+  if (isNaN(c.getTime())) return ""; // an unreadable date cell
+  try {
+    return Utilities.formatDate(c, typeof tz === "string" && tz ? tz : "Etc/UTC", "yyyy-MM-dd");
+  } catch (err) {
+    // Last resort so one odd cell can't stop the whole Sheet from loading.
+    return c.getFullYear() + "-" + ("0" + (c.getMonth() + 1)).slice(-2) + "-" + ("0" + c.getDate()).slice(-2);
+  }
 }
 
 function norm_(v) {
