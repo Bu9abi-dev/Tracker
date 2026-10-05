@@ -29,6 +29,9 @@
   --chart-3: #d97706;
   --chart-4: #64748b;
   --chart-5: #a1a1aa;
+  --chart-6: #0891b2;
+  --chart-7: #a16207;
+  --chart-8: #4f46e5;
   --chart-invested: #a1a1aa;
   --chart-grid: #f0f0f2;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.04);
@@ -59,6 +62,9 @@
     --chart-3: #fbbf24;
     --chart-4: #94a3b8;
     --chart-5: #71717a;
+    --chart-6: #22d3ee;
+    --chart-7: #ca8a04;
+    --chart-8: #818cf8;
     --chart-invested: #71717a;
     --chart-grid: #1c1c1f;
     --shadow: none;
@@ -89,6 +95,9 @@
   --chart-3: #fbbf24;
   --chart-4: #94a3b8;
   --chart-5: #71717a;
+  --chart-6: #22d3ee;
+  --chart-7: #ca8a04;
+  --chart-8: #818cf8;
   --chart-invested: #71717a;
   --chart-grid: #1c1c1f;
   --shadow: none;

@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, CirclePlus, House, Layers, Settings } from "lucide-react";
+import { BookOpen, CirclePlus, FileUp, House, Layers, Settings } from "lucide-react";
 
 const TABS = [
   { href: "/", label: "Overview", icon: House, match: (p: string) => p === "/" },
   { href: "/portfolios", label: "Portfolios", icon: Layers, match: (p: string) => p.startsWith("/portfolios") || p.startsWith("/p/") },
-  { href: "/journal", label: "Journal", icon: BookOpen, match: (p: string) => p.startsWith("/journal") },
   { href: "/add", label: "Add", icon: CirclePlus, match: (p: string) => p.startsWith("/add") },
+  { href: "/upload", label: "Upload", icon: FileUp, match: (p: string) => p.startsWith("/upload") },
+  { href: "/journal", label: "Journal", icon: BookOpen, match: (p: string) => p.startsWith("/journal") },
 ] as const;
 
 /** Fixed bottom tab bar on phones (≤ 5 tabs, 44pt+ targets, safe-area aware). */
@@ -16,7 +17,7 @@ export function BottomNav() {
   const path = usePathname();
   return (
     <nav aria-label="Primary" className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/90 backdrop-blur-md md:hidden">
-      <ul className="mx-auto grid max-w-lg grid-cols-4">
+      <ul className="mx-auto grid max-w-lg grid-cols-5">
         {TABS.map(({ href, label, icon: Icon, match }) => {
           const active = match(path);
           return (

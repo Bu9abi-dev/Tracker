@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
-import { getPortfolio, isPersonalId } from "@/config/portfolios";
-import { loadData, getDataSource } from "@/lib/data";
+import { findPortfolio } from "@/config/portfolios";
+import { loadData } from "@/lib/data";
 import { buildAllViews, buildPersonalView } from "@/lib/portfolio";
 import { formatDate } from "@/lib/format";
 import { AllocationDonut, ValueChart } from "@/components/charts/charts";
 import { DataIssuesPanel } from "@/components/data-issues";
 import { Freshness } from "@/components/freshness";
+import { SectorDonut } from "@/components/holdings";
+import { SampleDataBanner } from "@/components/sample-banner";
 import { Hero, KpiGrid } from "@/components/metrics";
 import { Money } from "@/components/currency";
 import { Badge, Card, EmptyState, Pct, SectionTitle } from "@/components/ui";
@@ -15,17 +17,20 @@ export const dynamic = "force-dynamic";
 
 export default async function OverviewPage() {
   const load = await loadData();
-  const personal = buildPersonalView(load.portfolios);
+  const personal = buildPersonalView(load.registry, load.data, load.statements);
+  const get = (id: string) => findPortfolio(load.registry, id);
+  const names = Object.fromEntries(load.registry.list.map((p) => [p.id, p.shortName]));
   const views = buildAllViews(load);
   const managed = views.filter((v) => v.config.ownership === "managed" && v.config.status === "active");
-  const personalViews = views.filter((v) => isPersonalId(v.config.id));
+  const personalViews = views.filter((v) => personal.ids.includes(v.config.id));
   const other = views.filter((v) => v.config.status !== "active");
   const pm = personal.metrics;
-  const names = personal.ids.map((id) => `${id} ${getPortfolio(id)?.shortName}`).join(" + ");
-  const allIssues = views.flatMap((v) => v.issues);
+  const title = personal.ids.map((id) => `${id} ${get(id)?.shortName}`).join(" + ");
+  const allIssues = [...load.registryIssues, ...views.flatMap((v) => v.issues)];
 
   return (
     <div className="space-y-10">
+      {load.source === "csv" ? <SampleDataBanner /> : null}
       {/* Personal (P1 + P3) */}
       <section aria-labelledby="personal" className="space-y-5">
         <Hero
@@ -35,7 +40,7 @@ export default async function OverviewPage() {
               <span id="personal" className="text-fg">
                 Personal
               </span>
-              <span>· {names}</span>
+              <span>· {title}</span>
             </>
           }
           subtitle={pm.lastDate ? `As of ${formatDate(pm.lastDate)} · TWR since ${formatDate(pm.firstDate)}` : undefined}
@@ -59,8 +64,8 @@ export default async function OverviewPage() {
                 <AllocationDonut
                   items={personal.allocation.map((a) => ({
                     ...a,
-                    label: `${a.id} ${getPortfolio(a.id)?.shortName ?? ""}`,
-                    color: getPortfolio(a.id)?.color ?? "--chart-5",
+                    label: `${a.id} ${get(a.id)?.shortName ?? ""}`,
+                    color: get(a.id)?.color ?? "--chart-5",
                   }))}
                 />
               </Card>
@@ -69,6 +74,23 @@ export default async function OverviewPage() {
         ) : (
           <EmptyState title="No personal data yet">Add a snapshot for P1 or P3 to get started.</EmptyState>
         )}
+        <Card>
+          <SectionTitle
+            sub={
+              personal.sectorCoverage.length
+                ? `From the latest statement of ${personal.sectorCoverage.join(" + ")} · P2 excluded`
+                : "Upload a statement to see what you own by sector"
+            }
+            action={
+              <Link href="/upload" className="inline-flex min-h-10 items-center gap-1 text-sm font-medium text-accent">
+                Upload <ChevronRight aria-hidden size={16} />
+              </Link>
+            }
+          >
+            Sector allocation
+          </SectionTitle>
+          {personal.sectors.length ? <SectorDonut slices={personal.sectors} /> : null}
+        </Card>
         <ul className="grid gap-3 sm:grid-cols-2">
           {personalViews.map((v) => (
             <PortfolioRow key={v.config.id} id={v.config.id} name={v.config.name} sub={v.config.description} value={v.metrics.value} twr={v.metrics.twr} pnl={v.metrics.pnl} />
@@ -120,8 +142,8 @@ export default async function OverviewPage() {
         </section>
       ) : null}
 
-      <DataIssuesPanel issues={allIssues} />
-      <Freshness fetchedAt={load.fetchedAt} source={getDataSource().kind} staleReason={load.staleReason} />
+      <DataIssuesPanel issues={allIssues} names={names} />
+      <Freshness fetchedAt={load.fetchedAt} source={load.source} staleReason={load.staleReason} />
     </div>
   );
 }

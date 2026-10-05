@@ -27,7 +27,7 @@ describe("Apps Script source", () => {
     expect(init.method).toBe("POST");
     expect(JSON.parse(String(init.body))).toEqual({ action: "list", token: TOKEN });
     expect(out.rows.P1).toEqual([{ date: "2026-10-02", invested: 1, value: 2, notes: "", row: 5 }]);
-    expect(Object.keys(out.rows)).toEqual(["P1"]); // unknown ids ignored
+    expect(Object.keys(out.rows)).toEqual(["P1", "PX"]); // portfolios are dynamic; the registry decides what's shown
   });
 
   it("serves the last good copy, labelled, when the Sheet is unavailable", async () => {
@@ -48,7 +48,7 @@ describe("Apps Script source", () => {
   it("throws on errors when there is no cached copy", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => reply({ ok: false, error: "Unauthorized" })));
     const src = await freshSource();
-    await expect(src.loadRaw()).rejects.toThrow("Unauthorized");
+    await expect(src.loadRaw()).rejects.toThrow(/token/);
   });
 
   it("posts new entries", async () => {
@@ -59,5 +59,21 @@ describe("Apps Script source", () => {
     await src.addEntry(entry);
     const init = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1];
     expect(JSON.parse(String(init.body))).toEqual({ action: "add", entry, token: TOKEN });
+  });
+
+  it("explains an outdated script deployment in plain words", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => reply({ ok: false, error: "Unknown action" })));
+    const src = await freshSource();
+    await expect(src.saveStatement({} as never)).rejects.toThrow(/New version/);
+  });
+
+  it("posts new portfolios with their tab name", async () => {
+    const fetchMock = vi.fn(async () => reply({ ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    const src = await freshSource();
+    const p = { id: "P6", name: "Gold", shortName: "Gold", description: "", status: "active" as const, ownership: "personal" as const, includeInPersonal: false, managedFor: "", color: "--chart-6" };
+    await src.createPortfolio(p, "P6 Gold");
+    const init = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1];
+    expect(JSON.parse(String(init.body))).toEqual({ action: "createPortfolio", portfolio: { ...p, tab: "P6 Gold" }, token: TOKEN });
   });
 });

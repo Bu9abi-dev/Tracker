@@ -554,3 +554,103 @@ export function allocation(values: Record<string, number>): { id: string; value:
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
+
+// ---------------------------------------------------------------------------
+// Holdings (from statements)
+// ---------------------------------------------------------------------------
+
+export interface HoldingLike {
+  symbol: string;
+  name: string;
+  sector: string;
+  valueUsd: number;
+  costBasisUsd: number | null;
+}
+
+export interface HoldingRow<H extends HoldingLike = HoldingLike> {
+  holding: H;
+  /** Share of the statement's holdings total. */
+  weight: number;
+  /** Unrealized P&L; null when the statement has no cost for this position. */
+  pnl: number | null;
+  pnlPct: number | null;
+}
+
+export interface HoldingsSummary<H extends HoldingLike = HoldingLike> {
+  totalValue: number;
+  /** Sum of cost for positions that have one. */
+  costKnown: number;
+  /** Value of the positions that have a cost (so P&L % compares like with like). */
+  valueWithCost: number;
+  /** Unrealized P&L across positions with a known cost. */
+  pnl: number | null;
+  pnlPct: number | null;
+  positionsWithCost: number;
+  positions: number;
+  rows: HoldingRow<H>[];
+}
+
+/** Totals, weights and unrealized P&L. Positions without a cost are left out of P&L, never guessed. */
+export function holdingsSummary<H extends HoldingLike>(holdings: readonly H[]): HoldingsSummary<H> {
+  const totalValue = holdings.reduce((a, h) => a + h.valueUsd, 0);
+  let costKnown = 0;
+  let valueWithCost = 0;
+  let positionsWithCost = 0;
+  const rows = holdings
+    .map((h) => {
+      const hasCost = h.costBasisUsd !== null && h.costBasisUsd > 0;
+      if (hasCost) {
+        costKnown += h.costBasisUsd!;
+        valueWithCost += h.valueUsd;
+        positionsWithCost++;
+      }
+      const pnl = hasCost ? h.valueUsd - h.costBasisUsd! : null;
+      return { holding: h, weight: totalValue > 0 ? h.valueUsd / totalValue : 0, pnl, pnlPct: hasCost ? pnl! / h.costBasisUsd! : null };
+    })
+    .sort((a, b) => b.holding.valueUsd - a.holding.valueUsd);
+  const pnl = positionsWithCost ? valueWithCost - costKnown : null;
+  return {
+    totalValue,
+    costKnown,
+    valueWithCost,
+    pnl,
+    pnlPct: pnl !== null && costKnown > 0 ? pnl / costKnown : null,
+    positionsWithCost,
+    positions: holdings.length,
+    rows,
+  };
+}
+
+export interface SectorSlice {
+  sector: string;
+  value: number;
+  share: number;
+  positions: number;
+}
+
+/** Value per sector, largest first. */
+export function sectorAllocation(holdings: readonly HoldingLike[]): SectorSlice[] {
+  const by = new Map<string, { value: number; positions: number }>();
+  for (const h of holdings) {
+    if (!(h.valueUsd > 0)) continue;
+    const s = by.get(h.sector) ?? { value: 0, positions: 0 };
+    s.value += h.valueUsd;
+    s.positions++;
+    by.set(h.sector, s);
+  }
+  const total = [...by.values()].reduce((a, s) => a + s.value, 0);
+  return [...by.entries()]
+    .map(([sector, s]) => ({ sector, value: s.value, positions: s.positions, share: total > 0 ? s.value / total : 0 }))
+    .sort((a, b) => b.value - a.value);
+}
+
+/**
+ * Sector allocation across several portfolios' latest statements.
+ * Only the ids passed in are used — callers pass the Personal ids, so managed money stays out.
+ */
+export function combinedSectorAllocation(
+  holdingsByPortfolio: Record<string, readonly HoldingLike[] | undefined>,
+  ids: readonly string[],
+): SectorSlice[] {
+  return sectorAllocation(ids.flatMap((id) => holdingsByPortfolio[id] ?? []));
+}

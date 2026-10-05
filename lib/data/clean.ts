@@ -1,4 +1,3 @@
-import type { PortfolioId } from "@/config/portfolios";
 import { buildPeriods, toSeries } from "@/lib/calculations";
 import type { DataIssue, PortfolioData, RawRow, Snapshot } from "./types";
 
@@ -86,7 +85,7 @@ function isBlank(v: unknown): boolean {
  * every skipped or suspicious row produces a DataIssue.
  * @param today YYYY-MM-DD in the user's time zone; later dates are rejected.
  */
-export function cleanRows(portfolioId: PortfolioId, rows: readonly RawRow[], today: string): PortfolioData {
+export function cleanRows(portfolioId: string, rows: readonly RawRow[], today: string): PortfolioData {
   const issues: DataIssue[] = [];
   const add = (i: Omit<DataIssue, "portfolioId">) => issues.push({ portfolioId, ...i });
   const parsed: (Snapshot & { row: number })[] = [];

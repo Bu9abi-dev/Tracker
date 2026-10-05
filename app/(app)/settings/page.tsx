@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { LogOut } from "lucide-react";
 import { getDataSource } from "@/lib/data";
+import { geminiConfigured } from "@/lib/gemini";
+import { CircleCheck, CircleDashed } from "lucide-react";
 import { THEME_COOKIE, parseTheme } from "@/lib/preferences";
 import { USD_TO_AED } from "@/lib/calculations";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -28,9 +30,13 @@ export default async function SettingsPage() {
         </div>
         <CurrencyToggle />
       </Card>
-      <Card className="space-y-1">
-        <h2 className="text-sm font-medium">Data source</h2>
-        <p className="text-sm text-muted">{source === "csv" ? "CSV files in /data (Phase 1, read-only)" : "Google Sheet via Apps Script (live)"}</p>
+      <Card className="space-y-3">
+        <h2 className="text-sm font-medium">Connections</h2>
+        <Status ok={source !== "csv"} label="Google Sheet" on="Connected — showing your real numbers" off="Not connected — showing sample numbers" />
+        <Status ok={geminiConfigured()} label="Gemini (statement reading)" on="On" off="Off — add GEMINI_API_KEY in Vercel" />
+        {source === "csv" || !geminiConfigured() ? (
+          <p className="text-xs text-muted">The step-by-step setup guide is in the project on GitHub: docs/SETUP.md.</p>
+        ) : null}
       </Card>
       <form action={logout}>
         <button
@@ -41,6 +47,19 @@ export default async function SettingsPage() {
         </button>
       </form>
       <p className="text-center text-xs text-subtle">To sign out every device, change SESSION_SECRET and redeploy.</p>
+    </div>
+  );
+}
+
+function Status({ ok, label, on, off }: { ok: boolean; label: string; on: string; off: string }) {
+  const Icon = ok ? CircleCheck : CircleDashed;
+  return (
+    <div className="flex items-start gap-3">
+      <Icon aria-hidden size={18} className={`mt-0.5 shrink-0 ${ok ? "text-up" : "text-muted"}`} />
+      <div>
+        <p className="text-sm font-medium">{label}</p>
+        <p className="text-xs text-muted">{ok ? on : off}</p>
+      </div>
     </div>
   );
 }

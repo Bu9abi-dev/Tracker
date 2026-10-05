@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
-import { getPortfolio } from "@/config/portfolios";
 import { getDataSource, loadData } from "@/lib/data";
-import { WRITABLE_IDS } from "@/lib/entry";
 import { todayIso } from "@/lib/format";
+import { SampleDataBanner } from "@/components/sample-banner";
 import { AddEntryForm } from "./form";
 
 export const metadata: Metadata = { title: "Add entry" };
@@ -10,12 +9,11 @@ export const dynamic = "force-dynamic";
 
 export default async function AddPage() {
   const load = await loadData();
-  const readOnly = getDataSource().kind === "csv";
-  const portfolios = WRITABLE_IDS.map((id) => {
-    const last = load.portfolios[id]?.snapshots.at(-1);
-    const cfg = getPortfolio(id)!;
+  const readOnly = !getDataSource().writable;
+  const portfolios = load.registry.list.filter((p) => p.status === "active").map((cfg) => {
+    const last = load.data[cfg.id]?.snapshots.at(-1);
     return {
-      id,
+      id: cfg.id,
       name: cfg.name,
       managed: cfg.ownership === "managed",
       lastInvested: last?.invested ?? 0,
@@ -29,12 +27,7 @@ export default async function AddPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Add entry</h1>
         <p className="mt-1 text-sm text-muted">Record a snapshot. Amounts in USD.</p>
       </div>
-      {readOnly ? (
-        <p role="status" className="rounded-xl bg-warn-soft px-3 py-2 text-sm text-warn">
-          Phase 1: data comes from the CSV files, which are read-only. Set <code>DATA_SOURCE=apps-script</code> to save entries to your Google Sheet. You
-          can still try the form; it validates but won&apos;t save.
-        </p>
-      ) : null}
+      {readOnly ? <SampleDataBanner action="save entries" /> : null}
       <AddEntryForm portfolios={portfolios} today={todayIso()} />
     </div>
   );
