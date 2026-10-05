@@ -5,7 +5,7 @@ import { requireSession } from "@/lib/auth";
 import { getDataSource } from "@/lib/data";
 import { ReadOnlySourceError } from "@/lib/data/csv-source";
 import { validateEntry, type EntryErrors } from "@/lib/entry";
-import { todayIso } from "@/lib/format";
+import { formatDate, todayIso } from "@/lib/format";
 
 export type AddState = { status: "idle" } | { status: "error"; message?: string; errors?: EntryErrors } | { status: "saved"; id: string; summary: string };
 
@@ -23,5 +23,5 @@ export async function addEntryAction(_prev: AddState, form: FormData): Promise<A
   }
   revalidatePath("/", "layout");
   const e = result.entry;
-  return { status: "saved", id: e.id, summary: `${e.portfolioId} · ${e.date}` };
+  return { status: "saved", id: e.id, summary: `${e.portfolioId} · ${formatDate(e.date)}` };
 }
