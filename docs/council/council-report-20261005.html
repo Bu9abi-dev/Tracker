@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architecture Council Report</title>
+<style>
+  :root { --bg:#fff; --fg:#18181b; --muted:#52525b; --border:#e4e4e7; --soft:#f4f4f5; --accent:#2563eb; --agree:#15803d; --clash:#b45309; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#09090b; --fg:#fafafa; --muted:#a1a1aa; --border:#27272a; --soft:#18181b; --accent:#60a5fa; --agree:#4ade80; --clash:#fbbf24; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 40px 16px 64px; }
+  h1 { font-size: 26px; letter-spacing:-0.02em; margin: 0 0 4px; }
+  h2 { font-size: 17px; margin: 32px 0 8px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .card { border:1px solid var(--border); border-radius:12px; padding:16px 20px; margin:12px 0; }
+  .verdict { border-left: 3px solid var(--accent); }
+  ol, ul { padding-left: 20px; margin: 6px 0; }
+  li { margin: 4px 0; }
+  table { width:100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; }
+  .y { color: var(--agree); font-weight:600; } .n { color: var(--clash); font-weight:600; }
+  details { border:1px solid var(--border); border-radius:10px; padding:10px 16px; margin:8px 0; }
+  summary { cursor:pointer; font-weight:600; }
+  footer { color: var(--muted); font-size: 13px; margin-top: 40px; border-top:1px solid var(--border); padding-top: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Architecture Council Report</h1>
+  <p class="sub">Question: Is the portfolio dashboard plan sound (financial maths, security, data layer, hard rules), and what should change before coding?</p>
+
+  <div class="card verdict">
+    <strong>Verdict:</strong> The plan is sound once a few things are fixed. Fix the TWR first period, how the Personal view handles stale dates, where the token travels, and how the P2 rule is enforced, then build. Start with a hand-calculated golden TWR fixture.
+  </div>
+
+  <h2>Recommendation (adopted)</h2>
+  <ol>
+    <li><b>TWR:</b> the first snapshot is the base and has no return. Label the method as weekly Modified Dietz, flag large flows, and show when the chain is unreliable.</li>
+    <li><b>Personal:</b> value it only on dates where P1 and P3 both have a fresh snapshot (within a tolerance window), and show when data is stale.</li>
+    <li><b>P2 barrier:</b> make the separation type-level, add a test that Personal output never changes when P2 data does, and keep P2 out of the donut.</li>
+    <li><b>Transfers:</b> add a transfer marker for the P5→P1 merge. Raise a prominent flag when Invested changes and the row has no note.</li>
+    <li><b>Auth:</b> use a long random password and a logout. Make SESSION_SECRET rotatable, re-check the session in the data layer and server actions, and send no-store.</li>
+    <li><b>Apps Script:</b> send the token in the POST body, return ISO dates, and sanitise anything written to the Sheet.</li>
+    <li><b>Resilience:</b> show "last updated", and fall back to the last good data if a fetch fails.</li>
+    <li><b>Add form:</b> include a deposit helper that computes cumulative Invested, and make submission idempotent.</li>
+  </ol>
+
+  <h2>Advisor positions</h2>
+  <div class="card">
+  <table>
+    <tr><th>Advisor</th><th>Plan sound?</th><th>Headline concern</th></tr>
+    <tr><td>Contrarian</td><td class="n">Not yet</td><td>Silent chain breaks, forward-fill, auth only in middleware</td></tr>
+    <tr><td>First Principles</td><td class="n">Data model weak</td><td>Snapshots aren't a cash-flow ledger; need a transfer event type</td></tr>
+    <tr><td>Expansionist</td><td class="y">Sound</td><td>Benchmarks, rolling returns, goals (rejected as feature creep)</td></tr>
+    <tr><td>Outsider</td><td class="n">Ambiguous</td><td>CSV semantics undefined; P2 can leak through other views</td></tr>
+    <tr><td>Executor</td><td class="y">Buildable with fixes</td><td>r0 bug, P5 merge, golden-file test first</td></tr>
+  </table>
+  </div>
+
+  <h2>Where the council agrees</h2>
+  <ul>
+    <li>r0 = V0/I0 − 1 invents a gain when tracking starts mid-life.</li>
+    <li>Forward-filling stale values into the Personal series corrupts its TWR and drawdown.</li>
+    <li>A token in the query string ends up in Google's logs.</li>
+    <li>A delay on failed logins does nothing on serverless.</li>
+    <li>The P2 rule needs structural enforcement, not just a config flag.</li>
+  </ul>
+
+  <h2>Where it clashes</h2>
+  <ul>
+    <li>Personal fix: weighted chaining or common dates. The chairman chose common dates.</li>
+    <li>Security depth: KV rate limiting is over-engineering for one user.</li>
+    <li>Flow ledger tab: cleaner, but it changes the data model, so it's left as an option for later.</li>
+  </ul>
+
+  <details><summary>Blind spots from peer review</summary>
+    <ul>
+      <li>A mistyped cumulative Invested creates a phantom flow. The fix is a deposit helper in the Add form.</li>
+      <li>The installed iPhone app doesn't share Safari's cookies, so you log in once inside it.</li>
+      <li>Apps Script cold starts and quotas mean the app needs a fallback to the last good data.</li>
+      <li>The AED toggle must apply to chart axes, not just to the numbers.</li>
+      <li>Sample CSVs must be synthetic.</li>
+    </ul>
+  </details>
+  <details><summary>Full transcript</summary>
+    <p>See <code>council-transcript-20261005.md</code> in this folder. It has all five advisor responses, the anonymisation mapping, the five peer reviews and the chairman's synthesis.</p>
+  </details>
+
+  <footer>LLM Council · 5 October 2026 · Portfolio dashboard architecture review</footer>
+</main>
+</body>
+</html>
