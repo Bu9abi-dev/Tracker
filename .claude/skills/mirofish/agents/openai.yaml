@@ -1,0 +1,4 @@
+interface:
+  display_name: "MiroFish"
+  short_description: "Run MiroFish-style prediction workflows offline"
+  default_prompt: "Use $mirofish to turn seed material into an offline MiroFish-style prediction workflow."
