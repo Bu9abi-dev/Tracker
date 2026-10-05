@@ -281,6 +281,10 @@ export interface ChartRow {
   flowKind: FlowKind;
   index: number;
   drawdown: number;
+  /** Market-only change vs the previous snapshot; null for the first row. */
+  marketChange: number | null;
+  /** Period return vs the previous snapshot; null for the first row or if unmeasurable. */
+  periodReturn: number | null;
 }
 
 export interface Metrics {
@@ -383,6 +387,8 @@ export function metricsFromSeries(series: readonly SeriesPoint[], totals: FlowTo
       flowKind: p.flowKind,
       index: index[i]!.index,
       drawdown: dd[i]!.drawdown,
+      marketChange: i > 0 ? periods[i - 1]!.marketChange : null,
+      periodReturn: i > 0 ? periods[i - 1]!.return : null,
     })),
   };
 }

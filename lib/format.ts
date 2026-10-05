@@ -58,8 +58,12 @@ export interface MoneyOptions {
 }
 
 /** Format a USD amount in the chosen display currency. */
-export function formatMoney(usd: number, currency: Currency, { signed = false, decimals = 0, compact = false }: MoneyOptions = {}): string {
-  const amount = convert(usd, currency);
+export function formatMoney(usd: number, currency: Currency, opts: MoneyOptions = {}): string {
+  return formatAmount(convert(usd, currency), currency, opts);
+}
+
+/** Format an amount that is already in `currency` (e.g. a converted chart value). */
+export function formatAmount(amount: number, currency: Currency, { signed = false, decimals = 0, compact = false }: MoneyOptions = {}): string {
   const abs = Math.abs(amount);
   const body = compact
     ? new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: abs >= 1e6 ? 2 : 1 }).format(abs)

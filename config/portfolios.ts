@@ -128,7 +128,7 @@ export const PERSONAL_IDS: readonly PersonalPortfolioId[] = PORTFOLIOS.filter(
   (p): p is PersonalEntry => p.ownership === "personal" && p.includeInPersonal,
 ).map((p) => p.id);
 
-export function getPortfolio(id: string): PortfolioConfig | undefined {
+export function getPortfolio(id: string): (PortfolioConfig & { id: PortfolioId }) | undefined {
   return PORTFOLIOS.find((p) => p.id === id);
 }
 
